@@ -1,2 +1,30 @@
-<!doctype html>
-<html><head><meta charset="utf-8"><title>Site</title></head><body></body></html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Combate à Desinformação</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <nav>
+      <div class="brand" onclick="location.href='/index.html'"><span>INÍCIO</span></div>
+      <div class="links"><a href="/oquee.html">O QUE É FAKE NEWS</a><a href="/detector/">DETECTOR</a><span class="nav-account"></span></div>
+      <button class="kebab" aria-label="Abrir menu">•••</button>
+      <div class="mobile-menu"><a href="/index.html">INÍCIO</a><a href="/oquee.html">O QUE É FAKE NEWS</a><a href="/detector/">DETECTOR</a><span class="nav-account"></span></div>
+    </nav>
+    <div class="hero-content"><div class="inner"><h1 id="hero-titulo" class="fade-up">Combate à<br>Desinformação</h1><a class="btn fade-up delay-1" href="/oquee.html">CONTINUAR</a></div></div>
+  </section>
+  <footer>© 2026 Combate à Desinformação</footer>
+  <script type="module" src="/app.js"></script>
+  <script type="module">
+    import { db } from '/firebase-config.js';
+    import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    getDoc(doc(db, 'conteudo', 'site')).then((snap) => {
+      if (snap.exists() && snap.data().heroTitulo) document.getElementById('hero-titulo').innerHTML = snap.data().heroTitulo.replace(/\n/g, '<br>');
+    }).catch(() => {});
+  </script>
+</body>
+</html>
