@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detector de Fake News</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <div class="brand" onclick="location.href='/index.html'"><span>INÍCIO</span></div>
+    <div class="links">
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+    <button class="kebab" aria-label="Abrir menu">•••</button>
+    <div class="mobile-menu">
+      <a href="/index.html">INÍCIO</a>
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+  </nav>
+
+  <section class="section">
+    <div class="card center fade-up">
+      <h2>Detector de Fake News</h2>
+      <p>Cole aqui embaixo o texto de uma notícia que você recebeu e a gente
+      te diz se ela parece ser verdadeira ou não.</p>
+      <textarea id="texto" rows="6" placeholder="Cole aqui o texto da notícia..."></textarea>
+      <button class="btn" onclick="analisar()">VERIFICAR</button>
+
+      <div id="resultado" style="width:100%;display:none;">
+        <p id="percTexto" style="font-size:22px;font-weight:700;"></p>
+        <div class="result-bar"><div id="resultFill" class="result-fill"></div></div>
+        <p id="palavrasEncontradas" class="msg"></p>
+
+        <p>A gente acertou?</p>
+        <div class="feedback-btns">
+          <button id="btn-acertou" onclick="enviarFeedback(true)">Sim, acertou</button>
+          <button id="btn-errou" onclick="enviarFeedback(false)">Não, errou</button>
+        </div>
+        <p id="feedbackMsg" class="msg"></p>
+      </div>
+    </div>
+
+    <div class="card" id="painel-palavras" style="display:none;">
+      <h2>Gerenciar palavras-chave</h2>
+      <p class="msg">Essas são as expressões usadas para identificar fake news. Remova as que não são um sinal claro, ou adicione novas.</p>
+      <ul id="lista-palavras"></ul>
+      <div class="linha-add">
+        <input type="text" id="nova-palavra" placeholder="Nova expressão suspeita...">
+        <button class="btn pequeno" id="add-palavra">Adicionar</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>© 2026 Combate à Desinformação</footer>
+
+  <script src="/script.js"></script>
+  <script type="module" src="/app.js"></script>
+  <script type="module" src="/detector-admin.js"></script>
+</body>
+</html>
