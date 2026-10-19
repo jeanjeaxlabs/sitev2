@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrar</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <div class="brand" onclick="location.href='/index.html'"><span>INÍCIO</span></div>
+    <div class="links">
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+    <button class="kebab" aria-label="Abrir menu">•••</button>
+    <div class="mobile-menu">
+      <a href="/index.html">INÍCIO</a>
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+  </nav>
+
+  <section class="section" style="max-width:480px;">
+    <div class="card fade-up">
+      <div class="tabs">
+        <div class="tab ativa" id="tab-entrar">Entrar</div>
+        <div class="tab" id="tab-criar">Criar conta</div>
+      </div>
+
+      <form id="form-entrar">
+        <label for="email-entrar">E-mail</label>
+        <input type="email" id="email-entrar" required>
+        <label for="senha-entrar">Senha</label>
+        <input type="password" id="senha-entrar" required>
+        <button class="btn" type="submit" style="margin-top:20px;width:100%;">ENTRAR</button>
+        <p id="msg-entrar" class="msg"></p>
+      </form>
+
+      <form id="form-criar" class="form-oculto">
+        <label for="email-criar">E-mail</label>
+        <input type="email" id="email-criar" required>
+        <label for="senha-criar">Senha</label>
+        <input type="password" id="senha-criar" required>
+        <label for="tipo-conta">Tipo de conta</label>
+        <select id="tipo-conta">
+          <option value="usuario">Usuário</option>
+          <option value="voluntario">Voluntário (ajuda a moderar)</option>
+        </select>
+        <button class="btn" type="submit" style="margin-top:20px;width:100%;">CRIAR CONTA</button>
+        <p id="msg-criar" class="msg"></p>
+      </form>
+    </div>
+  </section>
+
+  <footer>© 2026 Combate à Desinformação</footer>
+
+  <script type="module" src="/app.js"></script>
+  <script type="module">
+    import { auth, db } from '/firebase-config.js';
+    import {
+      signInWithEmailAndPassword, createUserWithEmailAndPassword,
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const tabEntrar = document.getElementById('tab-entrar');
+    const tabCriar = document.getElementById('tab-criar');
+    const formEntrar = document.getElementById('form-entrar');
+    const formCriar = document.getElementById('form-criar');
+
+    tabEntrar.onclick = () => {
+      tabEntrar.classList.add('ativa'); tabCriar.classList.remove('ativa');
+      formEntrar.classList.remove('form-oculto'); formCriar.classList.add('form-oculto');
+    };
+    tabCriar.onclick = () => {
+      tabCriar.classList.add('ativa'); tabEntrar.classList.remove('ativa');
+      formCriar.classList.remove('form-oculto'); formEntrar.classList.add('form-oculto');
+    };
+
+    function destinoPara(dados) {
+      if (dados.role === 'admin') return '/admin/';
+      if (dados.role === 'voluntario' && dados.aprovado) return '/moderar/';
+      return '/account/';
+    }
+
+    formEntrar.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('msg-entrar');
+      msg.textContent = 'Entrando...';
+      try {
+        const cred = await signInWithEmailAndPassword(
+          auth,
+          document.getElementById('email-entrar').value,
+          document.getElementById('senha-entrar').value,
+        );
+        const snap = await getDoc(doc(db, 'users', cred.user.uid));
+        const dados = snap.exists() ? snap.data() : { role: 'usuario', aprovado: true };
+        if (dados.role === 'voluntario' && !dados.aprovado) {
+          msg.textContent = 'Sua conta de voluntário ainda não foi aprovada por um administrador.';
+          return;
+        }
+        location.href = destinoPara(dados);
+      } catch (erro) {
+        msg.textContent = 'E-mail ou senha incorretos.';
+      }
+    });
+
+    formCriar.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('msg-criar');
+      const tipo = document.getElementById('tipo-conta').value;
+      msg.textContent = 'Criando conta...';
+      try {
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          document.getElementById('email-criar').value,
+          document.getElementById('senha-criar').value,
+        );
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          email: cred.user.email,
+          role: tipo,
+          aprovado: tipo === 'usuario',
+          criadoEm: serverTimestamp(),
+        });
+        if (tipo === 'voluntario') {
+          msg.textContent = 'Conta criada! Assim que um administrador aprovar você, vai poder ajudar a moderar.';
+        } else {
+          location.href = '/account/';
+        }
+      } catch (erro) {
+        msg.textContent = 'Não foi possível criar a conta. Verifique os dados e tente de novo.';
+      }
+    });
+  </script>
+</body>
+</html>
