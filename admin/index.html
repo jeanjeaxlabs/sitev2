@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administração</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <div class="brand" onclick="location.href='/index.html'"><span>INÍCIO</span></div>
+    <div class="links">
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+    <button class="kebab" aria-label="Abrir menu">•••</button>
+    <div class="mobile-menu">
+      <a href="/index.html">INÍCIO</a>
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+  </nav>
+
+  <section class="section" id="conteudo" style="display:none;">
+    <div class="card fade-up">
+      <h2>Voluntários aguardando aprovação</h2>
+      <div id="lista-pendentes"><p class="msg">Nenhum pedido pendente.</p></div>
+    </div>
+
+    <div class="card fade-up delay-1">
+      <h2>Todas as contas</h2>
+      <table>
+        <thead><tr><th>E-mail</th><th>Tipo</th><th>Aprovado</th><th></th></tr></thead>
+        <tbody id="tabela-usuarios"></tbody>
+      </table>
+    </div>
+
+    <div class="card fade-up delay-2">
+      <h2>Criar nova conta</h2>
+      <label for="novo-email">E-mail</label>
+      <input type="email" id="novo-email">
+      <label for="nova-senha">Senha</label>
+      <input type="password" id="nova-senha">
+      <label for="novo-tipo">Tipo de conta</label>
+      <select id="novo-tipo">
+        <option value="usuario">Usuário</option>
+        <option value="voluntario">Voluntário</option>
+        <option value="admin">Administrador</option>
+      </select>
+      <button class="btn" id="btn-criar-conta" style="margin-top:16px;">CRIAR CONTA</button>
+      <p id="msg-criar-conta" class="msg"></p>
+    </div>
+
+    <div class="card fade-up">
+      <h2>Textos do site</h2>
+      <label for="hero-titulo-campo">Título da página inicial</label>
+      <textarea id="hero-titulo-campo" rows="2"></textarea>
+      <label for="paragrafo-1-campo">"O que é Fake News" — primeiro parágrafo</label>
+      <textarea id="paragrafo-1-campo" rows="3"></textarea>
+      <label for="paragrafo-2-campo">"O que é Fake News" — segundo parágrafo</label>
+      <textarea id="paragrafo-2-campo" rows="3"></textarea>
+      <button class="btn" id="btn-salvar-textos" style="margin-top:16px;">SALVAR TEXTOS</button>
+      <p id="msg-textos" class="msg"></p>
+    </div>
+  </section>
+
+  <section class="section" id="bloqueado" style="display:none;">
+    <div class="card center">
+      <p class="aviso">Essa página é restrita a administradores.</p>
+      <a class="btn" href="/login/">ENTRAR</a>
+    </div>
+  </section>
+
+  <footer>© 2026 Combate à Desinformação</footer>
+
+  <script type="module" src="/app.js"></script>
+  <script type="module">
+    import { auth, db } from '/firebase-config.js';
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      doc, getDoc, setDoc, updateDoc, collection, query, where,
+      onSnapshot, getDocs,
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const conteudo = document.getElementById('conteudo');
+    const bloqueado = document.getElementById('bloqueado');
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { bloqueado.style.display = 'block'; return; }
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      const dados = snap.exists() ? snap.data() : null;
+      if (!dados || dados.role !== 'admin') { bloqueado.style.display = 'block'; return; }
+
+      conteudo.style.display = 'block';
+      carregarPendentes();
+      carregarTodos();
+      carregarTextos();
+    });
+
+    // ---------- voluntários pendentes ----------
+    function carregarPendentes() {
+      const listaPendentes = document.getElementById('lista-pendentes');
+      const q = query(collection(db, 'users'), where('role', '==', 'voluntario'), where('aprovado', '==', false));
+
+      onSnapshot(q, (snap) => {
+        if (snap.empty) { listaPendentes.innerHTML = '<p class="msg">Nenhum pedido pendente.</p>'; return; }
+        listaPendentes.innerHTML = '';
+        snap.forEach((d) => {
+          const div = document.createElement('div');
+          div.className = 'midia-item';
+          div.innerHTML = `<div style="flex:1;"><p>${d.data().email}</p></div>`;
+          const btn = document.createElement('button');
+          btn.className = 'btn pequeno';
+          btn.textContent = 'Aprovar';
+          btn.onclick = () => updateDoc(doc(db, 'users', d.id), { aprovado: true });
+          div.appendChild(btn);
+          listaPendentes.appendChild(div);
+        });
+      });
+    }
+
+    // ---------- todas as contas ----------
+    async function carregarTodos() {
+      const tabela = document.getElementById('tabela-usuarios');
+      const snap = await getDocs(collection(db, 'users'));
+      tabela.innerHTML = '';
+
+      snap.forEach((d) => {
+        const dados = d.data();
+        const tr = document.createElement('tr');
+
+        const tdEmail = document.createElement('td');
+        tdEmail.textContent = dados.email || '(sem e-mail)';
+
+        const tdTipo = document.createElement('td');
+        const selectTipo = document.createElement('select');
+        ['usuario', 'voluntario', 'admin'].forEach((r) => {
+          const opt = document.createElement('option');
+          opt.value = r; opt.textContent = r;
+          if (dados.role === r) opt.selected = true;
+          selectTipo.appendChild(opt);
+        });
+        tdTipo.appendChild(selectTipo);
+
+        const tdAprovado = document.createElement('td');
+        const checkAprovado = document.createElement('input');
+        checkAprovado.type = 'checkbox';
+        checkAprovado.checked = !!dados.aprovado;
+        tdAprovado.appendChild(checkAprovado);
+
+        const tdAcao = document.createElement('td');
+        const btnSalvar = document.createElement('button');
+        btnSalvar.className = 'btn pequeno';
+        btnSalvar.textContent = 'Salvar';
+        btnSalvar.onclick = () => updateDoc(doc(db, 'users', d.id), {
+          role: selectTipo.value,
+          aprovado: checkAprovado.checked,
+        });
+        tdAcao.appendChild(btnSalvar);
+
+        tr.appendChild(tdEmail); tr.appendChild(tdTipo); tr.appendChild(tdAprovado); tr.appendChild(tdAcao);
+        tabela.appendChild(tr);
+      });
+    }
+
+    // ---------- criar nova conta ----------
+    document.getElementById('btn-criar-conta').addEventListener('click', async () => {
+      const msg = document.getElementById('msg-criar-conta');
+      msg.textContent = 'Criando...';
+      try {
+        const tokenId = await auth.currentUser.getIdToken();
+        const resp = await fetch('/api/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenId}` },
+          body: JSON.stringify({
+            email: document.getElementById('novo-email').value,
+            senha: document.getElementById('nova-senha').value,
+            role: document.getElementById('novo-tipo').value,
+          }),
+        });
+        const dados = await resp.json();
+        msg.textContent = resp.ok ? 'Conta criada com sucesso!' : (dados.erro || 'Não foi possível criar a conta.');
+        if (resp.ok) carregarTodos();
+      } catch (erro) {
+        msg.textContent = 'Não foi possível criar a conta agora.';
+      }
+    });
+
+    // ---------- textos do site ----------
+    async function carregarTextos() {
+      const snap = await getDoc(doc(db, 'conteudo', 'site'));
+      if (!snap.exists()) return;
+      const dados = snap.data();
+      if (dados.heroTitulo) document.getElementById('hero-titulo-campo').value = dados.heroTitulo;
+      if (dados.oqueeParagrafo1) document.getElementById('paragrafo-1-campo').value = dados.oqueeParagrafo1;
+      if (dados.oqueeParagrafo2) document.getElementById('paragrafo-2-campo').value = dados.oqueeParagrafo2;
+    }
+
+    document.getElementById('btn-salvar-textos').addEventListener('click', async () => {
+      const msg = document.getElementById('msg-textos');
+      try {
+        await setDoc(doc(db, 'conteudo', 'site'), {
+          heroTitulo: document.getElementById('hero-titulo-campo').value,
+          oqueeParagrafo1: document.getElementById('paragrafo-1-campo').value,
+          oqueeParagrafo2: document.getElementById('paragrafo-2-campo').value,
+        }, { merge: true });
+        msg.textContent = 'Textos salvos!';
+      } catch (erro) {
+        msg.textContent = 'Não foi possível salvar agora.';
+      }
+    });
+  </script>
+</body>
+</html>
