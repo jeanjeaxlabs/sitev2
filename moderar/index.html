@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Área de Moderação</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <div class="brand" onclick="location.href='/index.html'"><span>INÍCIO</span></div>
+    <div class="links">
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+    <button class="kebab" aria-label="Abrir menu">•••</button>
+    <div class="mobile-menu">
+      <a href="/index.html">INÍCIO</a>
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+  </nav>
+
+  <section class="section" id="conteudo" style="display:none;">
+    <div class="card fade-up">
+      <h2>Textos para revisar</h2>
+      <p>Clique nas palavras: primeiro clique marca como sinal de fake news,
+      segundo clique marca como sinal de que é verdadeiro, terceiro clique
+      volta ao normal.</p>
+      <div class="legenda-cores">
+        <span><span class="bolinha fake"></span>sinal de fake news</span>
+        <span><span class="bolinha verdade"></span>sinal de verdade</span>
+      </div>
+      <div id="lista-textos"><p class="msg">Nenhum texto pendente no momento.</p></div>
+    </div>
+
+    <div class="card fade-up delay-1">
+      <h2>Fotos e vídeos enviados</h2>
+      <div id="lista-midias"><p class="msg">Nenhum envio pendente no momento.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="bloqueado" style="display:none;">
+    <div class="card center">
+      <p class="aviso" id="msg-bloqueado">Essa página é restrita a voluntários e administradores.</p>
+      <a class="btn" href="/login/">ENTRAR</a>
+    </div>
+  </section>
+
+  <footer>© 2026 Combate à Desinformação</footer>
+
+  <script type="module" src="/app.js"></script>
+  <script type="module">
+    import { auth, db } from '/firebase-config.js';
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      doc, getDoc, updateDoc, arrayUnion, collection, query, where,
+      onSnapshot, serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const conteudo = document.getElementById('conteudo');
+    const bloqueado = document.getElementById('bloqueado');
+    const msgBloqueado = document.getElementById('msg-bloqueado');
+    let emailAtual = '';
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { bloqueado.style.display = 'block'; return; }
+      emailAtual = user.email;
+
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      const dados = snap.exists() ? snap.data() : null;
+      const autorizado = dados && (dados.role === 'admin' || (dados.role === 'voluntario' && dados.aprovado));
+
+      if (!autorizado) {
+        if (dados && dados.role === 'voluntario' && !dados.aprovado) {
+          msgBloqueado.textContent = 'Sua conta de voluntário ainda não foi aprovada por um administrador.';
+        }
+        bloqueado.style.display = 'block';
+        return;
+      }
+
+      conteudo.style.display = 'block';
+      carregarTextos();
+      carregarMidias();
+    });
+
+    // ---------- textos para revisar ----------
+    function carregarTextos() {
+      const listaTextos = document.getElementById('lista-textos');
+      const q = query(collection(db, 'feedback'), where('revisado', '==', false));
+
+      onSnapshot(q, (snap) => {
+        const itens = [];
+        snap.forEach((d) => itens.push({ id: d.id, ...d.data() }));
+        itens.sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0));
+
+        if (!itens.length) { listaTextos.innerHTML = '<p class="msg">Nenhum texto pendente no momento.</p>'; return; }
+
+        listaTextos.innerHTML = '';
+        itens.forEach((item) => listaTextos.appendChild(criarCardTexto(item)));
+      });
+    }
+
+    function criarCardTexto(item) {
+      const div = document.createElement('div');
+      div.className = 'card';
+      const palavras = item.texto.split(/(\s+)/);
+
+      const textoDiv = document.createElement('div');
+      textoDiv.className = 'texto-revisar';
+      palavras.forEach((palavra) => {
+        if (!palavra.trim()) { textoDiv.appendChild(document.createTextNode(palavra)); return; }
+        const span = document.createElement('span');
+        span.className = 'palavra-clicavel';
+        span.textContent = palavra;
+        span.dataset.estado = 'neutro';
+        span.onclick = () => {
+          if (span.dataset.estado === 'neutro') { span.dataset.estado = 'fake'; span.classList.add('fake'); }
+          else if (span.dataset.estado === 'fake') { span.dataset.estado = 'verdade'; span.classList.remove('fake'); span.classList.add('verdade'); }
+          else { span.dataset.estado = 'neutro'; span.classList.remove('verdade'); }
+        };
+        textoDiv.appendChild(span);
+      });
+
+      const botaoSalvar = document.createElement('button');
+      botaoSalvar.className = 'btn pequeno';
+      botaoSalvar.textContent = 'Salvar revisão';
+      botaoSalvar.style.marginTop = '16px';
+      botaoSalvar.onclick = async () => {
+        const marcadasFake = [...textoDiv.querySelectorAll('[data-estado="fake"]')]
+          .map((s) => s.textContent.trim().toLowerCase()).filter(Boolean);
+        const marcadasVerdade = [...textoDiv.querySelectorAll('[data-estado="verdade"]')]
+          .map((s) => s.textContent.trim().toLowerCase()).filter(Boolean);
+
+        if (marcadasFake.length) {
+          await updateDoc(doc(db, 'config', 'palavras-chave'), { palavras: arrayUnion(...marcadasFake) });
+        }
+        if (marcadasVerdade.length) {
+          await updateDoc(doc(db, 'config', 'palavras-ignoradas'), { palavras: arrayUnion(...marcadasVerdade) })
+            .catch(async () => {
+              const { setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+              await setDoc(doc(db, 'config', 'palavras-ignoradas'), { palavras: marcadasVerdade });
+            });
+        }
+        await updateDoc(doc(db, 'feedback', item.id), { revisado: true });
+      };
+
+      div.appendChild(textoDiv);
+      div.appendChild(botaoSalvar);
+      return div;
+    }
+
+    // ---------- fotos e vídeos ----------
+    function carregarMidias() {
+      const listaMidias = document.getElementById('lista-midias');
+      const q = query(collection(db, 'midiaSubmissoes'), where('status', '==', 'pendente'));
+
+      onSnapshot(q, (snap) => {
+        const itens = [];
+        snap.forEach((d) => itens.push({ id: d.id, ...d.data() }));
+        itens.sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0));
+
+        if (!itens.length) { listaMidias.innerHTML = '<p class="msg">Nenhum envio pendente no momento.</p>'; return; }
+
+        listaMidias.innerHTML = '';
+        itens.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'midia-item';
+          const midiaTag = item.tipo === 'video'
+            ? `<video src="${item.url}" controls></video>`
+            : `<img src="${item.url}" alt="envio">`;
+
+          div.innerHTML = `
+            ${midiaTag}
+            <div style="flex:1;">
+              <textarea rows="2" placeholder="Escreva sua análise..."></textarea>
+              <button class="btn pequeno" style="margin-top:8px;">Responder</button>
+            </div>`;
+
+          div.querySelector('button').onclick = async () => {
+            const resposta = div.querySelector('textarea').value.trim();
+            if (!resposta) return;
+            await updateDoc(doc(db, 'midiaSubmissoes', item.id), {
+              status: 'respondido',
+              resposta,
+              respondidoPor: emailAtual,
+              respondidoEm: serverTimestamp(),
+            });
+          };
+
+          listaMidias.appendChild(div);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
