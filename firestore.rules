@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaLogado() {
+      return request.auth != null;
+    }
+    function meuUsuario() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function souAdmin() {
+      return estaLogado() && meuUsuario().role == 'admin';
+    }
+    function souVoluntarioAprovado() {
+      return estaLogado() && meuUsuario().role == 'voluntario' && meuUsuario().aprovado == true;
+    }
+    function podeModerar() {
+      return souAdmin() || souVoluntarioAprovado();
+    }
+
+    // lista de palavras-chave: todo mundo pode ler, só quem modera pode editar
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if podeModerar();
+    }
+
+    // perfil de cada conta
+    match /users/{uid} {
+      allow read: if estaLogado() && (request.auth.uid == uid || souAdmin());
+      allow create: if estaLogado() && request.auth.uid == uid
+                    && request.resource.data.role in ['usuario', 'voluntario']
+                    && request.resource.data.aprovado == (request.resource.data.role == 'usuario');
+      allow update: if souAdmin();
+    }
+
+    // feedback do detector (criado pelo servidor, revisado pelos moderadores)
+    match /feedback/{id} {
+      allow read, update: if podeModerar();
+      allow write: if false; // só o servidor (Admin SDK) cria feedback novo
+    }
+
+    // fotos e vídeos enviados para análise manual
+    match /midiaSubmissoes/{id} {
+      allow create: if estaLogado() && request.resource.data.uid == request.auth.uid;
+      allow read: if estaLogado() && (resource.data.uid == request.auth.uid || podeModerar());
+      allow update: if podeModerar();
+    }
+
+    // textos editáveis do site
+    match /conteudo/{id} {
+      allow read: if true;
+      allow write: if souAdmin();
+    }
+  }
+}
