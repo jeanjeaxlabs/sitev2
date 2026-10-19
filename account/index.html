@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minha Conta</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <div class="brand" onclick="location.href='/index.html'"><span>INÍCIO</span></div>
+    <div class="links">
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+    <button class="kebab" aria-label="Abrir menu">•••</button>
+    <div class="mobile-menu">
+      <a href="/index.html">INÍCIO</a>
+      <a href="/oquee.html">O QUE É FAKE NEWS</a>
+      <a href="/detector/">DETECTOR</a>
+      <span class="nav-account"></span>
+    </div>
+  </nav>
+
+  <section class="section" id="conteudo" style="display:none;">
+    <div class="card fade-up">
+      <h2>Enviar foto ou vídeo para análise</h2>
+      <p>Recebeu uma imagem ou vídeo suspeito? Envie aqui e um voluntário vai
+      dar uma olhada e te responder.</p>
+      <input type="file" id="arquivo" accept="image/*,video/*">
+      <button class="btn" id="btn-enviar" style="margin-top:16px;">ENVIAR PARA ANÁLISE</button>
+      <p id="msg-envio" class="msg"></p>
+    </div>
+
+    <div class="card fade-up delay-1">
+      <h2>Meus envios</h2>
+      <div id="lista-envios"><p class="msg">Nenhum envio ainda.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="bloqueado" style="display:none;">
+    <div class="card center">
+      <p class="aviso">Você precisa entrar na sua conta para acessar essa página.</p>
+      <a class="btn" href="/login/">ENTRAR</a>
+    </div>
+  </section>
+
+  <footer>© 2026 Combate à Desinformação</footer>
+
+  <script type="module" src="/app.js"></script>
+  <script type="module">
+    import { auth, db, storage } from '/firebase-config.js';
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      collection, addDoc, query, where, onSnapshot, serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+    const conteudo = document.getElementById('conteudo');
+    const bloqueado = document.getElementById('bloqueado');
+    const listaEnvios = document.getElementById('lista-envios');
+    let usuarioAtual = null;
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) { bloqueado.style.display = 'block'; return; }
+      usuarioAtual = user;
+      conteudo.style.display = 'block';
+
+      const q = query(collection(db, 'midiaSubmissoes'), where('uid', '==', user.uid));
+      onSnapshot(q, (snap) => {
+        const itens = [];
+        snap.forEach((d) => itens.push({ id: d.id, ...d.data() }));
+        itens.sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0));
+
+        if (!itens.length) { listaEnvios.innerHTML = '<p class="msg">Nenhum envio ainda.</p>'; return; }
+
+        listaEnvios.innerHTML = '';
+        itens.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'midia-item';
+          const midiaTag = item.tipo === 'video'
+            ? `<video src="${item.url}" controls></video>`
+            : `<img src="${item.url}" alt="envio">`;
+          div.innerHTML = `
+            ${midiaTag}
+            <div>
+              <p class="${item.status === 'respondido' ? 'status-respondido' : 'status-pendente'}">
+                ${item.status === 'respondido' ? 'Respondido' : 'Aguardando análise'}
+              </p>
+              ${item.resposta ? `<p>${item.resposta}</p>` : ''}
+            </div>`;
+          listaEnvios.appendChild(div);
+        });
+      });
+    });
+
+    document.getElementById('btn-enviar').addEventListener('click', async () => {
+      const input = document.getElementById('arquivo');
+      const msg = document.getElementById('msg-envio');
+      if (!usuarioAtual) { msg.textContent = 'Entre na sua conta primeiro.'; return; }
+      if (!input.files.length) { msg.textContent = 'Escolha um arquivo primeiro.'; return; }
+
+      const arquivo = input.files[0];
+      msg.textContent = 'Enviando...';
+      try {
+        const caminho = `submissoes/${usuarioAtual.uid}/${Date.now()}-${arquivo.name}`;
+        const storageRef = ref(storage, caminho);
+        await uploadBytes(storageRef, arquivo);
+        const url = await getDownloadURL(storageRef);
+
+        await addDoc(collection(db, 'midiaSubmissoes'), {
+          uid: usuarioAtual.uid,
+          url,
+          tipo: arquivo.type.startsWith('video') ? 'video' : 'imagem',
+          nomeArquivo: arquivo.name,
+          status: 'pendente',
+          criadoEm: serverTimestamp(),
+        });
+
+        msg.textContent = 'Enviado! Assim que um voluntário responder, aparece aqui embaixo.';
+        input.value = '';
+      } catch (erro) {
+        msg.textContent = 'Não foi possível enviar agora. Tente de novo em instantes.';
+      }
+    });
+  </script>
+</body>
+</html>
